@@ -20,27 +20,33 @@ def get_next_action(env, q, rng, state, epsilon):
     else:
          return np.argmax(q[state, :])
         
-
-def rl_learn(is_training=True, render=False, human=False, sarsa=False, chart_filename="blackjack.png"):
-    render_mode = None
-    if human:
-        render_mode = "rgb_array"
-    elif render:
-        render_mode="human"
-    env = gym.make("Blackjack-v1",  render_mode=render_mode)
-    
-    mapping = { 
+MAPPING = { 
         (ord('s'), ): 0,
         (ord('h'), ): 1,
-        
-    }
-    if human == True:
-        play(env, keys_to_action=mapping, wait_on_player=True, fps=5)
+}
+
+def rl_learn(mode="Sarsa", chart_filename="blackjack.png") :
+    '''
+    mode - "Sarsa", "Q-learning", "Human", "Random"
+    '''
+    match mode:
+        case "Human":
+            render_mode = "rgb_array" 
+        case "Random": 
+            render_mode = "human"
+        case _:
+            render_mode = None
+
+
+    env = gym.make("Blackjack-v1",  render_mode=render_mode)
+    
+    if mode == "Human":
+        play(env, keys_to_action=MAPPING, wait_on_player=True, fps=5)
         return     
 
 
-    observation_space_n = 32 * 11 * 3
-    if(is_training):
+    observation_space_n = 32 * 11 * 3 
+    if(mode in ["Sarsa", "Q-learning"]):
         q = np.zeros((observation_space_n , env.action_space.n))
     else:
         f = open(MODEL_FILE, "rb")
@@ -52,7 +58,7 @@ def rl_learn(is_training=True, render=False, human=False, sarsa=False, chart_fil
     discount_factor_g = 0.9
     episodes = 200000
 
-    if is_training == False:
+    if mode == "Random":
         episodes = 10
 
     epsilon_decay_rate = epsilon / (episodes / 2)
@@ -65,7 +71,7 @@ def rl_learn(is_training=True, render=False, human=False, sarsa=False, chart_fil
         terminated = False
         truncated = False
 
-        action = get_next_action(env,q, rng, state, epsilon) if is_training else env.action_space.sample()
+        action = get_next_action(env,q, rng, state, epsilon) if mode in ["Q-learning", "Sarsa"] else env.action_space.sample()
         while(not terminated and not truncated):
         
             new_state, reward, terminated, truncated, _ = env.step(action)
@@ -74,11 +80,10 @@ def rl_learn(is_training=True, render=False, human=False, sarsa=False, chart_fil
 
             next_action = get_next_action(env,q, rng, new_state, epsilon)
 
-            if is_training and not sarsa:
+            if mode == "Q-learning":
                 q[state, action] = q[state, action] + learning_rate_a*(reward + discount_factor_g * np.max(q[new_state, :]) - q[state, action])
 
-            if is_training and sarsa:
-
+            if mode == "Sarsa":
                 q[state, action] = q[state, action] + learning_rate_a*(reward + discount_factor_g * q[new_state, next_action] - q[state, action])
 
             rewards_per_episod[i] += reward
@@ -86,15 +91,15 @@ def rl_learn(is_training=True, render=False, human=False, sarsa=False, chart_fil
             state = new_state
             action = next_action
 
-        if is_training:
+        if mode in ["Sarsa", "Q-learning"]:
             epsilon = max(epsilon - epsilon_decay_rate, 0)
         if epsilon == 0: 
             learning_rate_a = 0.0001
     
     env.close()
-    if not is_training:
-        return
 
+    if mode in ["Human", "Random"] : 
+        return
     
     window_size = 1000 # Większe okno dla czytelności przy 100k epizodów
     sum_rewards = np.zeros(episodes - window_size + 1)
@@ -114,7 +119,7 @@ def rl_learn(is_training=True, render=False, human=False, sarsa=False, chart_fil
     plt.ylabel("Średnia nagroda (-1 przegrana, 0 remis, 1 wygrana)")
     plt.grid(True)
     plt.savefig(chart_filename)
-    print("Wykres zapisany jako blackjack.png")
+    print(f"Wykres zapisany jako {chart_filename}")
    
     f = open(MODEL_FILE, "wb")
     pickle.dump(q, f)
@@ -123,14 +128,16 @@ def rl_learn(is_training=True, render=False, human=False, sarsa=False, chart_fil
 if __name__ == "__main__":
 
     if INTERACTIVE:
+        '''
         is_training = True if input("Is training? [Y/n]: ").strip() == "Y" else False
         render = True if input("Render? [Y/n]: ").strip() == "Y" else False
         human = True if input("Do you want to control? [Y/n]: ").strip() == "Y" else False
         sarsa = True if input("Do you want to use SARSA? [Y/n]: ").strip() == "Y" else False
         rl_learn(is_training, render, human, sarsa)
+        '''
     else:
-        rl_learn(True, False, False, False, "q-learning.png")
-        rl_learn(True, False, False, True, "sarsa.png")
+        rl_learn( "Q-learning", "q-learning.png")
+        rl_learn("Sarsa", "sarsa.png")
 
 
 
