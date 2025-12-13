@@ -7,13 +7,21 @@ import  matplotlib.pyplot as plt
 from tqdm import tqdm
 import pickle
 
-MODEL_FILE = "frozen_lake8x8.pkl"
+MODEL_FILE = "blackjack.pkl"
+INTERACTIVE = False
 
 
 def convert_state(state):
     return state[0]  + state[1] * 32 + state[2]*32*11
 
-def rl_learn(is_training=True, render=False, human=False):
+def get_next_action(env, q, rng, state, epsilon):
+    if rng.random() < epsilon:
+        return env.action_space.sample()
+    else:
+         return np.argmax(q[state, :])
+        
+
+def rl_learn(is_training=True, render=False, human=False, sarsa=False, chart_filename="blackjack.png"):
     render_mode = None
     if human:
         render_mode = "rgb_array"
@@ -40,37 +48,43 @@ def rl_learn(is_training=True, render=False, human=False):
         f.close()
 
     epsilon = 1
-    learning_rate_a = 0.9
+    learning_rate_a = 0.001
     discount_factor_g = 0.9
-    episods = 15000
+    episodes = 200000
 
     if is_training == False:
-        episods = 10
+        episodes = 10
 
-    epsilon_decay_rate = 0.0001
+    epsilon_decay_rate = epsilon / (episodes / 2)
     rng = np.random.default_rng()
 
-    rewards_per_episod = np.zeros(episods)
-    for i in tqdm(range(episods)):
+    rewards_per_episod = np.zeros(episodes)
+
+    for i in tqdm(range(episodes)):
         state = convert_state(env.reset()[0])
         terminated = False
         truncated = False
 
+        action = get_next_action(env,q, rng, state, epsilon) if is_training else env.action_space.sample()
         while(not terminated and not truncated):
-            if rng.random() < epsilon and is_training :
-                action = env.action_space.sample()
-            else:
-                action = np.argmax(q[state, :])
         
             new_state, reward, terminated, truncated, _ = env.step(action)
 
             new_state = convert_state(new_state)
-            if is_training:
+
+            next_action = get_next_action(env,q, rng, new_state, epsilon)
+
+            if is_training and not sarsa:
                 q[state, action] = q[state, action] + learning_rate_a*(reward + discount_factor_g * np.max(q[new_state, :]) - q[state, action])
-            
+
+            if is_training and sarsa:
+
+                q[state, action] = q[state, action] + learning_rate_a*(reward + discount_factor_g * q[new_state, next_action] - q[state, action])
+
             rewards_per_episod[i] += reward
 
             state = new_state
+            action = next_action
 
         if is_training:
             epsilon = max(epsilon - epsilon_decay_rate, 0)
@@ -81,12 +95,9 @@ def rl_learn(is_training=True, render=False, human=False):
     if not is_training:
         return
 
-    window_size = 100
-    sum_rewards = np.zeros(episods - window_size + 1)
     
-    # --- RYSOWANIE WYKRESU ---
     window_size = 1000 # Większe okno dla czytelności przy 100k epizodów
-    sum_rewards = np.zeros(episods - window_size + 1)
+    sum_rewards = np.zeros(episodes - window_size + 1)
     
     current_sum = np.sum(rewards_per_episod[:window_size])
     
@@ -102,7 +113,7 @@ def rl_learn(is_training=True, render=False, human=False):
     plt.xlabel("Epizody")
     plt.ylabel("Średnia nagroda (-1 przegrana, 0 remis, 1 wygrana)")
     plt.grid(True)
-    plt.savefig("blackjack.png")
+    plt.savefig(chart_filename)
     print("Wykres zapisany jako blackjack.png")
    
     f = open(MODEL_FILE, "wb")
@@ -110,11 +121,16 @@ def rl_learn(is_training=True, render=False, human=False):
     f.close()
 
 if __name__ == "__main__":
-    is_training = True if input("Is training? [Y/n]: ").strip() == "Y" else False
-    render = True if input("Render? [Y/n]: ").strip() == "Y" else False
-    human = True if input("Do you want to control? [Y/n]: ").strip() == "Y" else False
-    rl_learn(is_training, render, human)
 
+    if INTERACTIVE:
+        is_training = True if input("Is training? [Y/n]: ").strip() == "Y" else False
+        render = True if input("Render? [Y/n]: ").strip() == "Y" else False
+        human = True if input("Do you want to control? [Y/n]: ").strip() == "Y" else False
+        sarsa = True if input("Do you want to use SARSA? [Y/n]: ").strip() == "Y" else False
+        rl_learn(is_training, render, human, sarsa)
+    else:
+        rl_learn(True, False, False, False, "q-learning.png")
+        rl_learn(True, False, False, True, "sarsa.png")
 
 
 
