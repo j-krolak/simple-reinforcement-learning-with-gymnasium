@@ -7,6 +7,7 @@ import matplotlib.pyplot as plt
 from tqdm import tqdm
 import pickle
 import os.path
+import sys
 
 
 
@@ -176,16 +177,24 @@ class RL_Model:
         save_model(q, f"model-{self.model_type}-level-3.pkl")
 
 
+def is_play_flag_present():
+    return "play" in sys.argv
+
 if __name__ == "__main__":
-    sarsa = RL_Model("Sarsa")
-    q_learning = RL_Model("Q-learning")
-    random_agent = RL_Model("Random")
+    if is_play_flag_present():
+        human_agent = RL_Model("Human")
+        human_agent.train()
+    else:
+        sarsa = RL_Model("Sarsa")
+        q_learning = RL_Model("Q-learning")
+        random_agent = RL_Model("Random")
 
-    sarsa.train()
-    sarsa.stats("sarsa.png")
+        sarsa.train()
+        sarsa.stats("sarsa.png")
 
-    q_learning.train()
-    sarsa.stats("q-learning.png")
+        q_learning.train()
+        sarsa.stats("q-learning.png")
 
-    random_agent.train()
-    random_agent.stats("random_agent.png")
+        random_agent.train()
+        random_agent.stats("random_agent.png")
+
